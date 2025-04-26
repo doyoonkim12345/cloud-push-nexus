@@ -34,12 +34,5 @@
 		"eslint-config-next": "15.2.3",
 		"tailwindcss": "^4",
 		"typescript": "^5"
-	},
-	"pnpm": {
-		"overrides": {
-			"@cloud-push/cloud": "link:../../packages/cloud",
-			"@cloud-push/core": "link:../../packages/core",
-			"@cloud-push/next": "link:../../packages/next"
-		}
 	}
 }

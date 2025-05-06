@@ -5,8 +5,8 @@ import {
 	QueryClient,
 } from "@tanstack/react-query";
 
-import HomePageContent from "./_components/HomePageContent";
 import type { Environment } from "@cloud-push/core";
+import HomePageContent from "./_components/HomePageContent";
 
 export default async function Home(params: {
 	searchParams: Promise<{ environment?: Environment; runtimeVersion?: string }>;

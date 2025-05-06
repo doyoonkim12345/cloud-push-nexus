@@ -1,5 +1,5 @@
+import { dbBrowserClient } from "@/cloud-push.browser";
 import type { Environment } from "@cloud-push/core";
-import { dbBrowserClient } from "../api/browserClient";
 
 const versionsQueries = {
 	all: { queryKey: ["versions"] },
@@ -11,8 +11,6 @@ const versionsQueries = {
 				conditions: { environment },
 				sortOptions: [{ direction: "desc", field: "createdAt" }],
 			});
-
-			console.log("bundles", bundles);
 
 			return bundles;
 		},

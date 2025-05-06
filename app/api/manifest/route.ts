@@ -5,14 +5,16 @@ import type { ExpoMetadata } from "@/features/versions/types";
 import type { NextRequest } from "next/server";
 import mime from "mime";
 import FormData from "form-data";
-import { dbNodeClient, storageNodeClient } from "@/features/api/nodeClient";
-import { parseFileAsJson } from "@cloud-push/core/utils";
-import type { Environment, Platform } from "@cloud-push/core";
 import type { ExpoConfig } from "@expo/config-types";
 import type { Bundle } from "@cloud-push/cloud";
 import { findRollbackTargetBundle } from "@/features/versions/utils/findRollbackTargetBundle";
 import { findUpdateTargetBundle } from "@/features/versions/utils/findUpdateTargetBundle";
-
+import {
+	type Environment,
+	type Platform,
+	parseFileAsJson,
+} from "@cloud-push/core";
+import { dbNodeClient, storageNodeClient } from "@/cloud-push.server";
 type Manifest = {
 	id: string;
 	createdAt: string;
@@ -82,7 +84,7 @@ export async function GET(request: NextRequest) {
 
 		const isEmbedded = !currentBundle;
 
-		await dbNodeClient.init();
+		await dbNodeClient.init?.();
 
 		const bundles = await dbNodeClient.findAll({
 			conditions: {
@@ -112,8 +114,6 @@ export async function GET(request: NextRequest) {
 					break;
 			}
 		}
-
-		console.log(nextBundle?.bundleId, currentBundle?.bundleId);
 
 		if (!nextBundle) {
 			throw new NoUpdateAvailableError();
@@ -229,7 +229,6 @@ export async function GET(request: NextRequest) {
 			headers,
 		});
 	} catch (error) {
-		console.error(error);
 		return new Response(JSON.stringify({ error }), {
 			status: 404,
 			headers: { "Content-Type": "application/json" },

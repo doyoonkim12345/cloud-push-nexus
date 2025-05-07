@@ -9,8 +9,8 @@
 		"lint": "next lint"
 	},
 	"dependencies": {
-		"@cloud-push/next": "1.0.0",
-		"@cloud-push/cloud": "1.0.2",
+		"@cloud-push/next": "1.0.1",
+		"@cloud-push/cloud": "1.0.3",
 		"@cloud-push/core": "1.0.2",
 		"@tanstack/react-query": "^5.71.0",
 		"form-data": "^4.0.2",

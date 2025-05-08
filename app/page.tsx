@@ -7,6 +7,7 @@ import {
 
 import type { Environment } from "@cloud-push/core";
 import HomePageContent from "./_components/HomePageContent";
+import { settingQueries } from "@/features/setting/queries";
 
 export default async function Home(params: {
 	searchParams: Promise<{ environment?: Environment; runtimeVersion?: string }>;
@@ -17,9 +18,13 @@ export default async function Home(params: {
 
 	const queryClient = new QueryClient();
 
-	const query = s3Queries.versions(environment);
+	const versionsQuery = s3Queries.versions(environment);
+	const settingQuery = settingQueries.detail();
 
-	await queryClient.prefetchQuery({ ...query });
+	await Promise.all([
+		queryClient.prefetchQuery({ ...versionsQuery }),
+		queryClient.prefetchQuery({ ...settingQuery }),
+	]);
 
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>

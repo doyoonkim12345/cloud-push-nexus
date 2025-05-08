@@ -1,12 +1,17 @@
 "use client";
 
 import { dbBrowserClient } from "@/cloud-push.browser";
+import { settingQueries } from "@/features/setting/queries";
 import versionsQueries from "@/features/versions/queries";
 import { findRollbackTargetBundle } from "@/features/versions/utils/findRollbackTargetBundle";
 import { findUpdateTargetBundle } from "@/features/versions/utils/findUpdateTargetBundle";
 import type { Bundle, UpdatePolicy } from "@cloud-push/cloud";
-import { groupBy, type Environment } from "@cloud-push/core";
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
+import { getCommitUrl, groupBy, type Environment } from "@cloud-push/core";
+import {
+	useSuspenseQuery,
+	useQueryClient,
+	useQuery,
+} from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { rcompare } from "semver";
@@ -55,6 +60,10 @@ export default function HomePageContent({
 
 	const { data: bundles } = useSuspenseQuery({
 		...versionsQueries.versions(environment),
+	});
+
+	const { data: setting } = useSuspenseQuery({
+		...settingQueries.detail(),
 	});
 
 	const setEnvironment = (targetEnvironment: Environment) => {
@@ -205,6 +214,17 @@ export default function HomePageContent({
 								<strong>Created At:</strong>{" "}
 								{new Date(bundle.createdAt).toLocaleString()}
 							</p>
+							<a
+								href={getCommitUrl({
+									repositoryUrl: setting.repositoryUrl,
+									gitHash: bundle.gitHash,
+								})}
+								target="_blank"
+								rel="noreferrer"
+							>
+								<strong>Commit:</strong>{" "}
+								<span className="underline">{bundle.gitHash}</span>
+							</a>
 
 							{/* ✅ 수정된 부분: <p> 태그 밖에 <ul> 위치 */}
 							<div>

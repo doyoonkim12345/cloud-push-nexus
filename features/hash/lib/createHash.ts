@@ -1,7 +1,7 @@
 import crypto, { type BinaryToTextEncoding } from "node:crypto";
 
 export async function createHash(
-	buffer: Buffer,
+	buffer: Uint8Array,
 	hashingAlgorithm: string,
 	encoding: BinaryToTextEncoding,
 ) {

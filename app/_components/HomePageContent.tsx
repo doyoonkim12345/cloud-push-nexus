@@ -4,43 +4,41 @@ import { dbBrowserClient } from "@/cloud-push.browser";
 import { settingQueries } from "@/features/setting/queries";
 import versionsQueries from "@/features/versions/queries";
 import type { Bundle, UpdatePolicy } from "@cloud-push/cloud";
-import { getCommitUrl, groupBy, type Environment } from "@cloud-push/core";
+import { getCommitUrl, groupBy } from "@cloud-push/core";
 import {
 	findRollbackTargetBundle,
 	findUpdateTargetBundle,
 } from "@cloud-push/next";
-import {
-	useSuspenseQuery,
-	useQueryClient,
-	useQuery,
-} from "@tanstack/react-query";
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { rcompare } from "semver";
 
 interface EnvironmentSelectorProps {
-	selectedEnvironment: Environment | null;
-	onChange: (selectedEnvironment: Environment) => void;
+	selectedChannel: string | null;
+	onChange: (selectedChannel: string) => void;
+	channels: string[];
 }
 
-const EnvironmentSelector: React.FC<EnvironmentSelectorProps> = ({
-	selectedEnvironment,
+const ChannelSelector: React.FC<EnvironmentSelectorProps> = ({
+	selectedChannel,
 	onChange,
+	channels,
 }) => {
 	return (
 		<div className="bg-white rounded-xl shadow p-6">
-			<h2 className="text-lg font-semibold mb-4">Select Environment</h2>
+			<h2 className="text-lg font-semibold mb-4">Select Channel</h2>
 			<div className="flex gap-3">
-				{["development", "production", "preview"].map((env) => (
+				{channels.map((env) => (
 					<button
 						type="button"
 						key={env}
 						className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-							selectedEnvironment === env
+							selectedChannel === env
 								? "bg-blue-600 text-white"
 								: "bg-gray-200 text-gray-700 hover:bg-gray-300"
 						}`}
-						onClick={() => onChange(env as Environment)}
+						onClick={() => onChange(env)}
 					>
 						{env}
 					</button>
@@ -51,26 +49,26 @@ const EnvironmentSelector: React.FC<EnvironmentSelectorProps> = ({
 };
 
 export default function HomePageContent({
-	environment,
+	channel,
 	runtimeVersion,
 }: {
-	environment: Environment;
+	channel: string;
 	runtimeVersion?: string;
 }) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 
 	const { data: bundles } = useSuspenseQuery({
-		...versionsQueries.versions(environment),
+		...versionsQueries.versions(channel),
 	});
 
 	const { data: setting } = useSuspenseQuery({
 		...settingQueries.detail(),
 	});
 
-	const setEnvironment = (targetEnvironment: Environment) => {
+	const setChannel = (targetChannel: string) => {
 		const newSearchParams = new URLSearchParams(window.location.search);
-		newSearchParams.set("environment", targetEnvironment);
+		newSearchParams.set("channel", targetChannel);
 		newSearchParams.delete("runtimeVersion");
 		router.replace(`?${newSearchParams.toString()}`, { scroll: false });
 	};
@@ -88,7 +86,7 @@ export default function HomePageContent({
 		await dbBrowserClient("update", { bundle: { ...bundle, updatePolicy } });
 		await dbBrowserClient("sync");
 		await queryClient.invalidateQueries({
-			queryKey: versionsQueries.versions(environment).queryKey,
+			queryKey: versionsQueries.versions(channel).queryKey,
 		});
 	};
 
@@ -127,9 +125,10 @@ export default function HomePageContent({
 			</header>
 
 			{/* 환경 선택기 */}
-			<EnvironmentSelector
-				selectedEnvironment={environment ?? null}
-				onChange={setEnvironment}
+			<ChannelSelector
+				selectedChannel={channel ?? null}
+				onChange={setChannel}
+				channels={setting.channels}
 			/>
 
 			{/* 런타임 버전 선택기 */}
@@ -216,6 +215,9 @@ export default function HomePageContent({
 								<strong>Created At:</strong>{" "}
 								{new Date(bundle.createdAt).toLocaleString()}
 							</p>
+							<p>
+								<strong>Environment:</strong> {bundle.environment}
+							</p>
 							<a
 								href={getCommitUrl({
 									repositoryUrl: setting.repositoryUrl,
@@ -227,7 +229,6 @@ export default function HomePageContent({
 								<strong>Commit:</strong>{" "}
 								<span className="underline">{bundle.gitHash}</span>
 							</a>
-
 							{/* ✅ 수정된 부분: <p> 태그 밖에 <ul> 위치 */}
 							<div>
 								<p className="mb-1">

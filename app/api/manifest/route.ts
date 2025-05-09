@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 		const bundles = await dbNodeClient.findAll({
 			conditions: {
 				runtimeVersion,
-				environment: channel as Environment,
+				channel,
 				supportAndroid: platform === "android" ? true : undefined,
 				supportIos: platform === "ios" ? true : undefined,
 			},
@@ -83,11 +83,11 @@ export async function GET(request: NextRequest) {
 		}
 
 		const manifest = await createManifest({
-			environment: channel as Environment,
 			bundleId: nextBundle.bundleId,
 			platform,
 			runtimeVersion,
 			storageClient: storageNodeClient,
+			channel,
 		});
 
 		return UpdateResponse({ manifest, bundleId: nextBundle.bundleId });

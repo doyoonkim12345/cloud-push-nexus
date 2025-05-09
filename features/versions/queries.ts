@@ -1,14 +1,13 @@
 import { dbBrowserClient } from "@/cloud-push.browser";
-import type { Environment } from "@cloud-push/core";
 
 const versionsQueries = {
 	all: { queryKey: ["versions"] },
-	versions: (environment?: Environment) => ({
-		queryKey: [...versionsQueries.all.queryKey, "versions", environment],
+	versions: (channel?: string) => ({
+		queryKey: [...versionsQueries.all.queryKey, "versions", channel],
 		queryFn: async () => {
 			await dbBrowserClient("init");
 			const bundles = await dbBrowserClient("findAll", {
-				conditions: { environment },
+				conditions: { channel },
 				sortOptions: [{ direction: "desc", field: "createdAt" }],
 			});
 

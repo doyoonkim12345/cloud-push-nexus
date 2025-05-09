@@ -3,10 +3,12 @@
 import { dbBrowserClient } from "@/cloud-push.browser";
 import { settingQueries } from "@/features/setting/queries";
 import versionsQueries from "@/features/versions/queries";
-import { findRollbackTargetBundle } from "@/features/versions/utils/findRollbackTargetBundle";
-import { findUpdateTargetBundle } from "@/features/versions/utils/findUpdateTargetBundle";
 import type { Bundle, UpdatePolicy } from "@cloud-push/cloud";
 import { getCommitUrl, groupBy, type Environment } from "@cloud-push/core";
+import {
+	findRollbackTargetBundle,
+	findUpdateTargetBundle,
+} from "@cloud-push/next";
 import {
 	useSuspenseQuery,
 	useQueryClient,

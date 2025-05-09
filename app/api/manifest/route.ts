@@ -1,61 +1,28 @@
-import { createHash } from "@/features/hash/lib/createHash";
-import getBase64URLEncoding from "@/features/helpers/lib/getBase64URLEncoding";
-import { NoUpdateAvailableError } from "@/features/helpers/lib/getLatestUpdateBundlePathForRuntimeVersionAsync";
-import type { ExpoMetadata } from "@/features/versions/types";
 import type { NextRequest } from "next/server";
-import mime from "mime";
-import FormData from "form-data";
-import type { ExpoConfig } from "@expo/config-types";
 import type { Bundle } from "@cloud-push/cloud";
-import { findRollbackTargetBundle } from "@/features/versions/utils/findRollbackTargetBundle";
-import { findUpdateTargetBundle } from "@/features/versions/utils/findUpdateTargetBundle";
-import {
-	type Environment,
-	type Platform,
-	parseFileAsJson,
-} from "@cloud-push/core";
 import { dbNodeClient, storageNodeClient } from "@/cloud-push.server";
-type Manifest = {
-	id: string;
-	createdAt: string;
-	runtimeVersion: string;
-	launchAsset: Asset;
-	assets: Asset[];
-	metadata: { [key: string]: string };
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	extra: { [key: string]: any };
-};
-
-type Asset = {
-	hash?: string;
-	key: string;
-	contentType: string;
-	fileExtension?: string;
-	url: string;
-};
+import {
+	ErrorResponse,
+	findRollbackTargetBundle,
+	findUpdateTargetBundle,
+	parseHeaders,
+	UpdateResponse,
+} from "@cloud-push/next";
+import { createManifest } from "@cloud-push/next/node";
+import type { Environment } from "@cloud-push/core";
 
 export async function GET(request: NextRequest) {
-	// runtimeVersion
-	const runtimeVersionFromHeader = request.headers.get("expo-runtime-version");
-	const runtimeVersionFromQuery =
-		request.nextUrl.searchParams.get("runtime-version");
-	const runtimeVersion = runtimeVersionFromHeader ?? runtimeVersionFromQuery;
-
-	// platform
-	const platformFromHeader = request.headers.get("expo-platform");
-	const platformFromQuery = request.nextUrl.searchParams.get("platform");
-	const platform = (platformFromHeader ?? platformFromQuery) as Platform | null;
-
-	// protocolVersion
-	const protocolVersionHeader = request.headers.get("expo-protocol-version");
-	const protocolVersion = parseInt(protocolVersionHeader ?? "0", 10);
-
-	// environment
-	const environment = request.headers.get(
-		"cloud-push-environment",
-	) as Environment | null;
-	const embeddedUpdateId = request.headers.get("expo-embedded-update-id");
-	const currentUpdateId = request.headers.get("expo-current-update-id");
+	const {
+		currentUpdateId,
+		embeddedUpdateId,
+		channel,
+		platform,
+		protocolVersion,
+		runtimeVersion,
+	} = parseHeaders({
+		headers: request.headers,
+		url: new URL(request.url),
+	});
 
 	if (
 		!runtimeVersion ||
@@ -63,17 +30,9 @@ export async function GET(request: NextRequest) {
 		!protocolVersion ||
 		!embeddedUpdateId ||
 		!currentUpdateId ||
-		!environment
+		!channel
 	) {
-		return new Response(
-			JSON.stringify({
-				error: "Not Enough Params",
-			}),
-			{
-				status: 404,
-				headers: { "Content-Type": "application/json" },
-			},
-		);
+		return ErrorResponse(new Error("Not Enough Params"));
 	}
 
 	try {
@@ -89,7 +48,7 @@ export async function GET(request: NextRequest) {
 		const bundles = await dbNodeClient.findAll({
 			conditions: {
 				runtimeVersion,
-				environment,
+				environment: channel as Environment,
 				supportAndroid: platform === "android" ? true : undefined,
 				supportIos: platform === "ios" ? true : undefined,
 			},
@@ -116,122 +75,23 @@ export async function GET(request: NextRequest) {
 		}
 
 		if (!nextBundle) {
-			throw new NoUpdateAvailableError();
+			throw new Error("update not existed");
 		}
 
 		if (nextBundle.bundleId === currentBundle?.bundleId) {
 			throw new Error("latest Version");
 		}
 
-		const updateBundlePath = `${runtimeVersion}/${environment}/${nextBundle.bundleId}/`;
-
-		const metadata = await storageNodeClient.getFile({
-			key: `${updateBundlePath}metadata.json`,
-		});
-
-		const metadataJson = await parseFileAsJson<ExpoMetadata>(metadata);
-
-		const expoConfig = await storageNodeClient.getFile({
-			key: `${updateBundlePath}expoConfig.json`,
-		});
-
-		const expoConfigJson = await parseFileAsJson<ExpoConfig>(expoConfig);
-
-		const platformMetadata = metadataJson.fileMetadata[platform];
-
-		const assets = await Promise.all(
-			platformMetadata.assets.map((asset) => {
-				const generateAsset = async (): Promise<Asset> => {
-					const file = await storageNodeClient.getFile({
-						key: `${updateBundlePath}${asset.path}`.replace(/\\/g, "/"),
-					});
-					return {
-						contentType: mime.getType(asset.ext)!,
-						url: await storageNodeClient.getFileSignedUrl({
-							key: `${updateBundlePath}${asset.path.replace(/\\/g, "/")}`,
-						}),
-						fileExtension: `.${asset.ext}`,
-						key: await createHash(file, "md5", "hex"),
-						hash: getBase64URLEncoding(
-							await createHash(file, "sha256", "base64"),
-						),
-					};
-				};
-				return generateAsset();
-			}),
-		);
-
-		const launchAssetFile = await storageNodeClient.getFile({
-			key: `${updateBundlePath}${platformMetadata.bundle}`.replace(/\\/g, "/"),
-		});
-
-		const launchAsset: Asset = {
-			contentType: "application/javascript",
-			fileExtension: ".bundle",
-			url: await storageNodeClient.getFileSignedUrl({
-				key: `${updateBundlePath}${platformMetadata.bundle.replace(
-					/\\/g,
-					"/",
-				)}`,
-			}),
-			key: await createHash(launchAssetFile, "md5", "hex"),
-			hash: getBase64URLEncoding(
-				await createHash(launchAssetFile, "sha256", "base64"),
-			),
-		};
-
-		const manifest: Manifest = {
-			id: nextBundle.bundleId,
-			createdAt: new Date(Date.now()).toString(),
+		const manifest = await createManifest({
+			environment: channel as Environment,
+			bundleId: nextBundle.bundleId,
+			platform,
 			runtimeVersion,
-			metadata: {},
-			assets,
-			launchAsset,
-			extra: {
-				expoClient: expoConfigJson,
-				// 현재 번들이 강제 업데이트를 필요로 하는 업데이트인지
-				shouldForceUpdate: currentBundle?.updatePolicy === "FORCE_UPDATE",
-			},
-		};
-
-		const assetRequestHeaders: { [key: string]: object } = {};
-		for (const asset of [...manifest.assets, manifest.launchAsset]) {
-			assetRequestHeaders[asset.key] = {
-				"test-header": "test-header-value",
-			};
-		}
-
-		const form = new FormData();
-		form.append("manifest", JSON.stringify(manifest), {
-			contentType: "application/json",
-			header: {
-				"content-type": "application/json; charset=utf-8",
-			},
+			storageClient: storageNodeClient,
 		});
 
-		form.append("extensions", JSON.stringify({ assetRequestHeaders }), {
-			contentType: "application/json",
-		});
-
-		const buffer = form.getBuffer();
-
-		const headers = {
-			"expo-protocol-version": protocolVersion.toString(),
-			"expo-sfv-version": "0",
-			"cache-control": "private, max-age=0",
-			"content-type": `multipart/mixed; boundary=${form.getBoundary()}`,
-			"expo-current-update-id": nextBundle.bundleId,
-			...form.getHeaders(), // 중요: form 자체가 필요한 헤더들 추가
-		};
-
-		return new Response(buffer, {
-			status: 200,
-			headers,
-		});
+		return UpdateResponse({ manifest, bundleId: nextBundle.bundleId });
 	} catch (error) {
-		return new Response(JSON.stringify({ error }), {
-			status: 404,
-			headers: { "Content-Type": "application/json" },
-		});
+		return ErrorResponse(error as Error);
 	}
 }
